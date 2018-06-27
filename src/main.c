@@ -68,6 +68,11 @@ void get_statistics(const double x[], int n, volatile double r[s_LAST]) {
 }
 
 int main(int argc, char** argv) {
+	#pragma omp parallel
+	{
+		// hack to setup the correct affinity.
+	}
+
 	aml_init(&argc,&argv); //includes MPI_Init inside
 	setup_globals();
 
