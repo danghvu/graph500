@@ -204,7 +204,11 @@ inline void aml_poll_intra(void) {
 				acks_intra[from]++; //normally we have delayed ack
 			process_intra( from, length,recvbuf_intra +AGGR_intra*index);
 		}
+#ifndef _NO_PERSIST
 		MPI_Start( rqrecv_intra+index);
+#else
+		MPI_Irecv( recvbuf_intra+AGGR_intra*index, AGGR_intra, MPI_CHAR,MPI_ANY_SOURCE, MPI_ANY_TAG, comm_intra,rqrecv_intra+index );
+#endif
 	}
 }
 // poll internode message
@@ -227,7 +231,11 @@ static void aml_poll(void) {
 				acks[from]++; //normally we have delayed ack
 			process( from, length,recvbuf+AGGR*index );
 		}
+#ifndef _NO_PERSIST
 		MPI_Start( rqrecv+index );
+#else
+		MPI_Irecv( recvbuf+AGGR*index, AGGR, MPI_CHAR,MPI_ANY_SOURCE, MPI_ANY_TAG, comm,rqrecv+index );
+#endif
 	}
 }
 
@@ -315,7 +323,14 @@ int stringCmp( const void *a, const void *b)
 SOATTR int aml_init( int *argc, char ***argv ) {
 	int r, i, j,tmpmax;
 
+#ifndef USE_OMP
 	r = MPI_Init(argc, argv);
+#else
+  int provided;
+  r = MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
+  if (provided != MPI_THREAD_MULTIPLE) return -1;
+#endif
+
 	if ( r != MPI_SUCCESS ) return r;
 
 	MPI_Comm_size( MPI_COMM_WORLD, &num_procs );
@@ -382,7 +397,11 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 	fflush(NULL);
 	//init preposted recvs: NRECV internode
 	for(i=0;i<NRECV;i++)  {
+#ifndef _NO_PERSIST
 		r = MPI_Recv_init( recvbuf+AGGR*i, AGGR, MPI_CHAR,MPI_ANY_SOURCE, MPI_ANY_TAG, comm,rqrecv+i );
+#else
+		r = MPI_Irecv( recvbuf+AGGR*i, AGGR, MPI_CHAR,MPI_ANY_SOURCE, MPI_ANY_TAG, comm,rqrecv+i );
+#endif
 		if ( r != MPI_SUCCESS ) return r;
 	}
 	sendbuf = malloc( AGGR*(num_groups+NSEND));
@@ -397,7 +416,11 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 
 
 	for(i=0;i<NRECV_intra;i++)  {
+#ifndef _NO_PERSIST
 		r = MPI_Recv_init( recvbuf_intra+AGGR_intra*i, AGGR_intra, MPI_CHAR,MPI_ANY_SOURCE, MPI_ANY_TAG, comm_intra,rqrecv_intra+i );
+#else
+		r = MPI_Irecv( recvbuf_intra+AGGR_intra*i, AGGR_intra, MPI_CHAR,MPI_ANY_SOURCE, MPI_ANY_TAG, comm_intra,rqrecv_intra+i );
+#endif
 		if ( r != MPI_SUCCESS ) return r;
 	}
 	sendbuf_intra = malloc( AGGR_intra*(group_size+NSEND_intra));
@@ -412,8 +435,10 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 	for ( j = 0; j < group_size; j++ ) {
 		sendsize_intra[j] = 0; nbuf_intra[j] = j; acks_intra[j]=0;
 	}
+#ifndef _NO_PERSIST
 	for(i=0;i<NRECV_intra;i++)
 		MPI_Start(rqrecv_intra+i);
+#endif
 
 	for ( j = 0; j < NSEND_intra; j++ ) {
 		MPI_Isend( NULL, 0, MPI_CHAR, MPI_PROC_NULL, 0, comm_intra, rqsend_intra+j );
@@ -423,8 +448,12 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 	for ( j = 0; j < num_groups; j++ ) {
 		sendsize[j] = 0; nbuf[j] = j;  acks[j]=0;
 	}
+
+#ifndef _NO_PERSIST
 	for(i=0;i<NRECV;i++)
 		MPI_Start( rqrecv+i );
+#endif
+
 	for ( j = 0; j < NSEND; j++ ) {
 		MPI_Isend( NULL, 0, MPI_CHAR, MPI_PROC_NULL, 0, comm, rqsend+j );
 		activebuf[j]=num_groups+j;
